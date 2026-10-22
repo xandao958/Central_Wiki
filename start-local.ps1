@@ -268,8 +268,10 @@ function Set-LanFirewallRule([int]$Port) {
             -Action Allow `
             -Profile Any `
             -ErrorAction Stop
-        Set-NetFirewallPortFilter -InputObject $rule -Protocol TCP -LocalPort "$Port" -ErrorAction Stop
-        Set-NetFirewallAddressFilter -InputObject $rule -RemoteAddress LocalSubnet -ErrorAction Stop
+        $portFilters = $rule | Get-NetFirewallPortFilter -ErrorAction Stop
+        Set-NetFirewallPortFilter -InputObject $portFilters -Protocol TCP -LocalPort "$Port" -ErrorAction Stop
+        $addressFilters = $rule | Get-NetFirewallAddressFilter -ErrorAction Stop
+        Set-NetFirewallAddressFilter -InputObject $addressFilters -RemoteAddress LocalSubnet -ErrorAction Stop
     }
     else {
         New-NetFirewallRule `
