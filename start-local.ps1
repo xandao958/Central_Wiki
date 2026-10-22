@@ -399,25 +399,57 @@ function Ensure-Environment {
 }
 
 function Get-MachineIPv4 {
-    $defaultRoute = Get-NetRoute -DestinationPrefix "0.0.0.0/0" |
-        Sort-Object RouteMetric |
-        Select-Object -First 1
-    if (-not $defaultRoute) {
-        throw "Não foi possível encontrar uma interface de rede IPv4 ativa."
-    }
-
-    $machineIp = Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $defaultRoute.InterfaceIndex |
-        Where-Object {
-            $_.AddressState -eq "Preferred" -and
-            $_.IPAddress -ne "127.0.0.1" -and
-            -not $_.IPAddress.StartsWith("169.254.")
-        } |
-        Select-Object -First 1 -ExpandProperty IPAddress
-    if (-not $machineIp) {
+    $connectedAdapters = @(
+        Get-NetAdapter |
+            Where-Object {
+                $_.Status -eq "Up" -and
+                $_.MediaConnectionState -eq "Connected"
+            }
+    )
+    $connectedInterfaceIndexes = @($connectedAdapters | ForEach-Object { [int]$_.InterfaceIndex })
+    if ($connectedInterfaceIndexes.Count -eq 0) {
         throw "Não foi possível encontrar o endereço IPv4 da interface de rede ativa."
     }
 
-    return $machineIp
+    $preferredAddresses = @(
+        Get-NetIPAddress -AddressFamily IPv4 |
+            Where-Object {
+                $_.InterfaceIndex -in $connectedInterfaceIndexes -and
+                $_.AddressState -eq "Preferred" -and
+                $_.IPAddress -ne "127.0.0.1" -and
+                -not $_.IPAddress.StartsWith("169.254.") -and
+                -not $_.SkipAsSource
+            }
+    )
+    $addressesByInterface = @{}
+    foreach ($address in $preferredAddresses) {
+        if (-not $addressesByInterface.ContainsKey([int]$address.InterfaceIndex)) {
+            $addressesByInterface[[int]$address.InterfaceIndex] = [string]$address.IPAddress
+        }
+    }
+    if ($addressesByInterface.Count -eq 0) {
+        throw "Não foi possível encontrar o endereço IPv4 da interface de rede ativa."
+    }
+
+    $defaultRoutes = @(
+        Get-NetRoute -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue |
+            Where-Object { $addressesByInterface.ContainsKey([int]$_.InterfaceIndex) } |
+            Sort-Object RouteMetric
+    )
+    if ($defaultRoutes.Count -gt 0) {
+        return $addressesByInterface[[int]$defaultRoutes[0].InterfaceIndex]
+    }
+
+    $interfacesByMetric = @(
+        Get-NetIPInterface -AddressFamily IPv4 |
+            Where-Object { $addressesByInterface.ContainsKey([int]$_.InterfaceIndex) } |
+            Sort-Object InterfaceMetric
+    )
+    if ($interfacesByMetric.Count -gt 0) {
+        return $addressesByInterface[[int]$interfacesByMetric[0].InterfaceIndex]
+    }
+
+    return @($addressesByInterface.Values)[0]
 }
 
 function Get-ConfiguredPort {
