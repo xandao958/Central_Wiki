@@ -431,10 +431,26 @@ function Get-MachineIPv4 {
         throw "Não foi possível encontrar o endereço IPv4 da interface de rede ativa."
     }
 
+    $interfaceMetrics = @{}
+    foreach ($interface in Get-NetIPInterface -AddressFamily IPv4) {
+        if ($addressesByInterface.ContainsKey([int]$interface.InterfaceIndex)) {
+            $interfaceMetrics[[int]$interface.InterfaceIndex] = [int]$interface.InterfaceMetric
+        }
+    }
+
     $defaultRoutes = @(
         Get-NetRoute -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue |
             Where-Object { $addressesByInterface.ContainsKey([int]$_.InterfaceIndex) } |
-            Sort-Object RouteMetric
+            ForEach-Object {
+                $interfaceIndex = [int]$_.InterfaceIndex
+                if ($interfaceMetrics.ContainsKey($interfaceIndex)) {
+                    [pscustomobject]@{
+                        InterfaceIndex = $interfaceIndex
+                        EffectiveMetric = [int]$_.RouteMetric + $interfaceMetrics[$interfaceIndex]
+                    }
+                }
+            } |
+            Sort-Object EffectiveMetric
     )
     if ($defaultRoutes.Count -gt 0) {
         return $addressesByInterface[[int]$defaultRoutes[0].InterfaceIndex]

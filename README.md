@@ -37,7 +37,7 @@ Para instalar também as ferramentas de teste e executar a suíte:
 - `WIKI_SECRET_KEY`: segredo opcional para assinatura de sessões. Se não for definido, uma chave local é criada em `data/.secret`.
 - `WIKI_COOKIE_SECURE=1`: habilita cookies `Secure` quando a aplicação está atrás de HTTPS.
 
-O launcher `start-local.ps1` escolhe automaticamente um IPv4 da máquina e usa a porta `8443` por padrão; a opção do menu **Alterar porta do servidor** salva uma nova porta, e `WIKI_PORT` no terminal tem prioridade sobre essa configuração. O início direto com `python main.py` também usa `8443` por padrão e aceita `WIKI_PORT`. Para substituir a porta pelo PowerShell nesta sessão:
+O launcher `start-local.ps1` escolhe automaticamente um IPv4 de um adaptador conectado, considerando as métricas da rota e da interface quando há mais de uma rede ativa, e usa a porta `8443` por padrão. A opção do menu **Alterar porta do servidor** salva uma nova porta, e `WIKI_PORT` no terminal tem prioridade sobre essa configuração. Se a conexão de rede mudar, reinicie o servidor para que ele passe a usar o novo endereço; para acesso de outros dispositivos, use o endereço exibido pelo launcher. O início direto com `python main.py` também usa `8443` por padrão e aceita `WIKI_PORT`. Para substituir a porta pelo PowerShell nesta sessão:
 
 ```powershell
 $env:WIKI_PORT = "8444"
