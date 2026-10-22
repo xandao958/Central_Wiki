@@ -7,9 +7,9 @@ from fastapi.testclient import TestClient
 import main
 
 
-def test_configured_server_port_defaults_to_5160_and_accepts_override(monkeypatch):
+def test_configured_server_port_defaults_to_8443_and_accepts_override(monkeypatch):
     monkeypatch.delenv("WIKI_PORT", raising=False)
-    assert main.configured_server_port() == 5160
+    assert main.configured_server_port() == 8443
 
     monkeypatch.setenv("WIKI_PORT", "12345")
     assert main.configured_server_port() == 12345
