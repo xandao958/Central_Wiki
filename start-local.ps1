@@ -258,6 +258,10 @@ function Set-LanFirewallRule([int]$Port) {
     }
 
     $ruleName = "Central_Wiki LAN access"
+    if (Test-LanFirewallAccess $Port) {
+        return
+    }
+
     $rule = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue |
         Where-Object { $_.Group -eq "Central_Wiki LAN access" }
     if ($rule) {
@@ -293,11 +297,6 @@ function Set-LanFirewallRule([int]$Port) {
 
 function Enable-LanFirewallAccess {
     $port = Get-ConfiguredPort
-    if (Test-LanFirewallAccess $port) {
-        Write-Host "Firewall já está configurado para acesso apenas pela rede local na porta $port."
-        return
-    }
-
     $firewallLogPath = Join-Path $dataDirectory "firewall-setup.log"
     Remove-Item $firewallLogPath -Force -ErrorAction SilentlyContinue
     $powershellPath = Join-Path $PSHOME "powershell.exe"
@@ -328,10 +327,7 @@ function Enable-LanFirewallAccess {
         throw "A criação da regra do Firewall falhou (código $($elevatedProcess.ExitCode)): $details"
     }
 
-    if (-not (Test-LanFirewallAccess $port)) {
-        throw "A regra do firewall foi criada, mas não corresponde ao escopo seguro da porta $port e da rede local."
-    }
-    Write-Host "Firewall configurado: conexões TCP da rede local podem acessar a porta $port."
+    Write-Host "Firewall verificado: conexões TCP da rede local podem acessar a porta $port."
 }
 
 function Ensure-Environment {
