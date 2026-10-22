@@ -210,9 +210,44 @@ function Get-ManagedServer {
     return $serverInfo
 }
 
+function Test-LanFirewallAccess([int]$Port) {
+    $ruleName = "Central_Wiki LAN access"
+    $rules = @(
+        Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue |
+            Where-Object { $_.Group -eq "Central_Wiki LAN access" }
+    )
+    foreach ($rule in $rules) {
+        if (
+            $rule.Enabled -ne "True" -or
+            $rule.Direction -ne "Inbound" -or
+            $rule.Action -ne "Allow" -or
+            $rule.Profile -ne "Any"
+        ) {
+            continue
+        }
+        $portFilter = $rule | Get-NetFirewallPortFilter
+        $addressFilter = $rule | Get-NetFirewallAddressFilter
+        $remoteAddresses = @($addressFilter.RemoteAddress | ForEach-Object { [string]$_ })
+        if (
+            $portFilter.Protocol -eq "TCP" -and
+            [string]$portFilter.LocalPort -eq [string]$Port -and
+            $remoteAddresses.Count -eq 1 -and
+            $remoteAddresses[0] -eq "LocalSubnet"
+        ) {
+            return $true
+        }
+    }
+    return $false
+}
+
 function Enable-LanFirewallAccess {
     $port = Get-ConfiguredPort
     $ruleName = "Central_Wiki LAN access"
+    if (Test-LanFirewallAccess $port) {
+        Write-Host "Firewall já está configurado para acesso apenas pela rede local na porta $port."
+        return
+    }
+
     $elevatedCommand = @"
 `$ErrorActionPreference = 'Stop'
 `$rule = Get-NetFirewallRule -DisplayName '$ruleName' -ErrorAction SilentlyContinue |
@@ -238,18 +273,7 @@ else {
         throw "Não foi possível criar a regra do Firewall do Windows."
     }
 
-    $rule = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue |
-        Where-Object { $_.Group -eq "Central_Wiki LAN access" }
-    if (-not $rule -or $rule.Enabled -ne "True" -or $rule.Action -ne "Allow") {
-        throw "A regra de acesso à rede local não foi confirmada pelo Firewall do Windows."
-    }
-    $portFilter = $rule | Get-NetFirewallPortFilter
-    $addressFilter = $rule | Get-NetFirewallAddressFilter
-    if (
-        $portFilter.Protocol -ne "TCP" -or
-        [string]$portFilter.LocalPort -ne [string]$port -or
-        [string]$addressFilter.RemoteAddress -notmatch "LocalSubnet"
-    ) {
+    if (-not (Test-LanFirewallAccess $port)) {
         throw "A regra do firewall foi criada, mas não corresponde ao escopo seguro da porta $port e da rede local."
     }
     Write-Host "Firewall configurado: conexões TCP da rede local podem acessar a porta $port."
@@ -605,6 +629,14 @@ function Start-WikiServer {
         Write-Host "Aviso: não foi possível atualizar o atalho na Área de Trabalho: $($_.Exception.Message)" -ForegroundColor Yellow
     }
 
+    try {
+        Enable-LanFirewallAccess
+    }
+    catch {
+        Write-Host "Aviso: não foi possível liberar o acesso de outros dispositivos: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "O servidor continuará acessível neste PC. Para tentar liberar a rede local novamente, use a opção 7 e aprove a solicitação do Windows."
+    }
+
     $existingServer = Get-ManagedServer
     if ($existingServer) {
         Write-Host "O servidor já está ativo: $($existingServer.url)"
@@ -700,9 +732,6 @@ function Start-WikiServer {
     Start-Process $serverInfo.url
     Write-Host "Servidor ativo: $($serverInfo.url)"
     Write-Host "Para acessar de outro dispositivo na rede local, use esse mesmo endereço."
-    if (-not (Get-NetFirewallRule -DisplayName "Central_Wiki LAN access" -ErrorAction SilentlyContinue)) {
-        Write-Host "Se outro dispositivo não conectar, escolha a opção 7 para liberar somente a rede local no firewall." -ForegroundColor Yellow
-    }
 }
 
 function Stop-WikiServer {
@@ -804,7 +833,7 @@ while (-not $exitLauncher) {
     Write-Host "[4] Abrir no navegador"
     Write-Host "[5] Alternar tema claro/escuro"
     Write-Host "[6] Alterar porta do servidor"
-    Write-Host "[7] Liberar acesso da rede local no Firewall do Windows (solicita UAC)"
+    Write-Host "[7] Tentar liberar acesso da rede local novamente (solicita UAC)"
     Write-Host "[8] Sair (encerra o servidor)"
     $choice = Read-Host "Escolha uma opção"
 
