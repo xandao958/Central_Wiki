@@ -420,6 +420,9 @@ def test_editor_proposal_requires_assigned_moderator_to_integrate(app_client):
 
 
 def test_admin_only_app_customization_changes_brand_and_navigation(app_client):
+    assert main.app.title == "Central_Wiki"
+    assert main.app_configuration()["app_name"] == "Central_Wiki"
+
     editor_csrf = sign_in(app_client)
     denied = app_client.get("/admin/settings")
     assert denied.status_code == 403
@@ -507,7 +510,13 @@ def test_initialize_database_migrates_existing_user_names(tmp_path, monkeypatch)
         assert db.execute("SELECT full_name FROM users").fetchall() == []
 
 
-def test_initialize_database_migrates_brand_configuration(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    ("stored_name", "expected_name"),
+    [("Consat_Wiki", "Central_Wiki"), ("Wiki Interna", "Wiki Interna")],
+)
+def test_initialize_database_migrates_brand_configuration(
+    tmp_path, monkeypatch, stored_name, expected_name
+):
     database_path = tmp_path / "legacy-brand.db"
     monkeypatch.setattr(main, "DB_PATH", database_path)
     with sqlite3.connect(database_path) as db:
@@ -530,9 +539,13 @@ def test_initialize_database_migrates_brand_configuration(tmp_path, monkeypatch)
             )
             """
         )
-        db.execute("INSERT INTO app_configuration (id) VALUES (1)")
+        db.execute(
+            "INSERT INTO app_configuration (id, app_name) VALUES (1, ?)",
+            (stored_name,),
+        )
     main.initialize_database()
     config = main.app_configuration()
+    assert config["app_name"] == expected_name
     assert config["page_settings"] == "Personalizar aplicativo"
     assert config["page_account"] == "Minha conta"
     assert config["brand_version"] == 1

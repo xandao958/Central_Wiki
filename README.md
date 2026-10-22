@@ -1,4 +1,4 @@
-# Consat_Wiki
+# Central_Wiki
 
 Aplicação web inicial para organizar a documentação e os procedimentos da empresa. A versão atual inclui contas internas, setores, funções por setor, artigos com rascunho/revisão/publicação, histórico de versões, busca, API REST inicial e auditoria.
 
@@ -6,10 +6,10 @@ Aplicação web inicial para organizar a documentação e os procedimentos da em
 
 Requisitos: Windows PowerShell e conexão com a internet na primeira instalação. O launcher instala Python 3.14 pelo repositório WinGet da Microsoft se não encontrar Python 3.10 ou superior; as bibliotecas são instaladas do índice oficial do PyPI.
 
-1. Dê duplo clique em `Consat_Wiki.cmd` ou abra o atalho com o nome atual do aplicativo na Área de Trabalho. Para iniciar pelo PowerShell, execute:
+1. Dê duplo clique em `Central_Wiki.cmd` ou abra o atalho com o nome atual do aplicativo na Área de Trabalho. Para iniciar pelo PowerShell, execute:
 
    ```powershell
-   .\Consat_Wiki.cmd
+   .\Central_Wiki.cmd
    ```
 
 Em cada execução, o launcher verifica se os arquivos essenciais e os arquivos de templates/estilos estão presentes e não vazios, instala/repara as dependências declaradas e valida imports e compatibilidade com `pip check`. Se o banco já existir, executa `PRAGMA quick_check` e `foreign_key_check`; caso detecte corrupção, para e orienta restaurar um backup, sem apagar ou sobrescrever os dados. O Python e as bibliotecas vêm de fontes oficiais via HTTPS: WinGet/Microsoft e PyPI. Arquivos do próprio projeto ausentes ou vazios são reportados para restauração de uma cópia confiável; o launcher não baixa código do projeto de uma origem não configurada. O launcher cria o ambiente virtual `.venv`, solicita os dados do primeiro administrador quando necessário, escolhe um IPv4 ativo e inicia o servidor na porta `51600` (ou na porta configurada), abrindo a página no navegador. Também cria ou atualiza um atalho permanente na Área de Trabalho com o nome configurado para o aplicativo; a janela do terminal usa esse nome seguido de **Launcher**. Ao mudar o nome/logo no painel de TI, o atalho e o terminal são atualizados quando o launcher atualizar o menu ou for iniciado novamente. Não é necessário ativar o ambiente virtual manualmente. A senha do primeiro administrador não é exibida; nas execuções seguintes, a conta existente é mantida.
@@ -30,7 +30,7 @@ Para instalar também as ferramentas de teste e executar a suíte:
 ## Configuração
 
 - `WIKI_HOST`: endereço de escuta; padrão `127.0.0.1`.
-- `WIKI_PORT`: porta HTTP; padrão `51600`. No terminal, defina essa variável antes de executar `.\Consat_Wiki.cmd` ou `python main.py` para substituir a porta configurada no launcher.
+- `WIKI_PORT`: porta HTTP; padrão `51600`. No terminal, defina essa variável antes de executar `.\Central_Wiki.cmd` ou `python main.py` para substituir a porta configurada no launcher.
 - `WIKI_DB_PATH`: caminho opcional do banco SQLite; padrão `data/wiki.db`.
 - `WIKI_SECRET_KEY`: segredo opcional para assinatura de sessões. Se não for definido, uma chave local é criada em `data/.secret`.
 - `WIKI_COOKIE_SECURE=1`: habilita cookies `Secure` quando a aplicação está atrás de HTTPS.
@@ -39,7 +39,7 @@ O launcher `start-local.ps1` escolhe automaticamente um IPv4 da máquina e usa a
 
 ```powershell
 $env:WIKI_PORT = "51601"
-.\Consat_Wiki.cmd
+.\Central_Wiki.cmd
 ```
 
 Os dados locais ficam na pasta `data/`, excluída do controle de versão. Faça backup da pasta regularmente. Para uso externo ou produção, configure HTTPS, acesso restrito/VPN, gestão de segredos, política de backup e revisão técnica antes de expor o servidor.

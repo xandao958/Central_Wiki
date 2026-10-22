@@ -7,7 +7,7 @@ $launcherSettingsPath = Join-Path $dataDirectory "launcher-settings.json"
 $venvPython = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
 $mainScript = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "main.py"))
 $script:pythonLauncher = $null
-$script:launcherAppName = "Consat_Wiki"
+$script:launcherAppName = "Central_Wiki"
 $script:portOverride = if ([string]::IsNullOrWhiteSpace($env:WIKI_PORT)) { $null } else { $env:WIKI_PORT }
 
 function Get-LauncherTheme {
@@ -39,7 +39,7 @@ function Set-LauncherTheme([string]$Theme) {
 
 function Test-ProjectFiles {
     $requiredFiles = @(
-        "Consat_Wiki.cmd",
+        "Central_Wiki.cmd",
         "start-local.ps1",
         "main.py",
         "requirements.txt",
@@ -365,7 +365,8 @@ function Ensure-DesktopShortcut([string]$AppName, [int]$BrandVersion, [bool]$Has
     $settings = Get-LauncherSettings
     $previousIconPath = if ($settings.ContainsKey("iconPath")) { [string]$settings.iconPath } else { $null }
     $shortcutPath = Join-Path $desktop "$safeName.lnk"
-    $targetPath = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "Consat_Wiki.cmd"))
+    $targetPath = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "Central_Wiki.cmd"))
+    $legacyTargetPath = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "Consat_Wiki.cmd"))
     $shell = New-Object -ComObject WScript.Shell
     if (
         $settings.ContainsKey("shortcutPath") -and
@@ -391,7 +392,10 @@ function Ensure-DesktopShortcut([string]$AppName, [int]$BrandVersion, [bool]$Has
         $previousPath = [System.IO.Path]::GetFullPath([string]$settings.shortcutPath)
         $previousShortcut = $shell.CreateShortcut($previousPath)
         if (
-            [System.IO.Path]::GetFullPath($previousShortcut.TargetPath) -ieq $targetPath -and
+            (
+                [System.IO.Path]::GetFullPath($previousShortcut.TargetPath) -ieq $targetPath -or
+                [System.IO.Path]::GetFullPath($previousShortcut.TargetPath) -ieq $legacyTargetPath
+            ) -and
             [System.IO.Path]::GetDirectoryName($previousPath) -ieq [System.IO.Path]::GetFullPath($desktop)
         ) {
             Remove-Item -LiteralPath $previousPath -Force

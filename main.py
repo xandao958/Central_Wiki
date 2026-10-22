@@ -34,7 +34,7 @@ ROLE_LABELS = {
     "approver": "Moderador",
 }
 DEFAULT_APP_SETTINGS = {
-    "app_name": "Consat_Wiki",
+    "app_name": "Central_Wiki",
     "page_home": "Visão geral",
     "page_articles": "Base de conhecimento",
     "page_admin": "Usuários e setores",
@@ -385,7 +385,7 @@ def initialize_database() -> None:
             );
             CREATE TABLE IF NOT EXISTS app_configuration (
                 id INTEGER PRIMARY KEY CHECK(id = 1),
-                app_name TEXT NOT NULL DEFAULT 'Consat_Wiki',
+                app_name TEXT NOT NULL DEFAULT 'Central_Wiki',
                 page_home TEXT NOT NULL DEFAULT 'Visão geral',
                 page_articles TEXT NOT NULL DEFAULT 'Base de conhecimento',
                 page_admin TEXT NOT NULL DEFAULT 'Usuários e setores',
@@ -436,6 +436,10 @@ def initialize_database() -> None:
                 db.execute(
                     f"ALTER TABLE app_configuration ADD COLUMN {column} {definition}"
                 )
+        db.execute(
+            "UPDATE app_configuration SET app_name = 'Central_Wiki' "
+            "WHERE app_name = 'Consat_Wiki'"
+        )
 
 
 def get_secret() -> bytes:
@@ -702,7 +706,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="Consat_Wiki", lifespan=lifespan)
+app = FastAPI(title="Central_Wiki", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 templates = Jinja2Templates(directory=ROOT / "templates")
 
