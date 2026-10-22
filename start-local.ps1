@@ -1,3 +1,9 @@
+param(
+    [switch]$ConfigureLanFirewallRule,
+    [int]$FirewallPort = 0,
+    [string]$FirewallLogPath
+)
+
 $ErrorActionPreference = "Stop"
 
 $dataDirectory = Join-Path $PSScriptRoot "data"
@@ -240,37 +246,82 @@ function Test-LanFirewallAccess([int]$Port) {
     return $false
 }
 
+function Set-LanFirewallRule([int]$Port) {
+    if ($Port -lt 1 -or $Port -gt 65535) {
+        throw "A porta para a regra do firewall precisa estar entre 1 e 65535."
+    }
+    $principal = [Security.Principal.WindowsPrincipal]::new(
+        [Security.Principal.WindowsIdentity]::GetCurrent()
+    )
+    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        throw "O processo elevado não recebeu permissões de administrador."
+    }
+
+    $ruleName = "Central_Wiki LAN access"
+    $rule = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue |
+        Where-Object { $_.Group -eq "Central_Wiki LAN access" }
+    if ($rule) {
+        Set-NetFirewallRule `
+            -InputObject $rule `
+            -Enabled True `
+            -Direction Inbound `
+            -Action Allow `
+            -Profile Any `
+            -ErrorAction Stop
+        Set-NetFirewallPortFilter -InputObject $rule -Protocol TCP -LocalPort "$Port" -ErrorAction Stop
+        Set-NetFirewallAddressFilter -InputObject $rule -RemoteAddress LocalSubnet -ErrorAction Stop
+    }
+    else {
+        New-NetFirewallRule `
+            -DisplayName $ruleName `
+            -Group "Central_Wiki LAN access" `
+            -Direction Inbound `
+            -Action Allow `
+            -Protocol TCP `
+            -LocalPort "$Port" `
+            -RemoteAddress LocalSubnet `
+            -Profile Any `
+            -ErrorAction Stop | Out-Null
+    }
+
+    if (-not (Test-LanFirewallAccess $Port)) {
+        throw "A regra criada não corresponde à porta $Port, ao protocolo TCP e à sub-rede local."
+    }
+}
+
 function Enable-LanFirewallAccess {
     $port = Get-ConfiguredPort
-    $ruleName = "Central_Wiki LAN access"
     if (Test-LanFirewallAccess $port) {
         Write-Host "Firewall já está configurado para acesso apenas pela rede local na porta $port."
         return
     }
 
-    $elevatedCommand = @"
-`$ErrorActionPreference = 'Stop'
-`$rule = Get-NetFirewallRule -DisplayName '$ruleName' -ErrorAction SilentlyContinue |
-    Where-Object { `$_.Group -eq 'Central_Wiki LAN access' }
-if (`$rule) {
-    Set-NetFirewallRule -InputObject `$rule -Enabled True -Direction Inbound -Action Allow -Profile Any -ErrorAction Stop
-    Set-NetFirewallPortFilter -InputObject `$rule -Protocol TCP -LocalPort '$port' -ErrorAction Stop
-    Set-NetFirewallAddressFilter -InputObject `$rule -RemoteAddress LocalSubnet -ErrorAction Stop
-}
-else {
-    New-NetFirewallRule -DisplayName '$ruleName' -Group 'Central_Wiki LAN access' -Direction Inbound -Action Allow -Protocol TCP -LocalPort '$port' -RemoteAddress LocalSubnet -Profile Any -ErrorAction Stop | Out-Null
-}
-"@
-    $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($elevatedCommand))
+    $firewallLogPath = Join-Path $dataDirectory "firewall-setup.log"
+    Remove-Item $firewallLogPath -Force -ErrorAction SilentlyContinue
     $powershellPath = Join-Path $PSHOME "powershell.exe"
-    $elevatedProcess = Start-Process `
-        -FilePath $powershellPath `
-        -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", $encodedCommand) `
-        -Verb RunAs `
-        -Wait `
-        -PassThru
+    $arguments = "-NoLogo -NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -ConfigureLanFirewallRule -FirewallPort $port -FirewallLogPath `"$firewallLogPath`""
+    try {
+        $elevatedProcess = Start-Process `
+            -FilePath $powershellPath `
+            -ArgumentList $arguments `
+            -Verb RunAs `
+            -Wait `
+            -PassThru
+    }
+    catch {
+        if ($_.Exception -is [System.ComponentModel.Win32Exception] -and $_.Exception.NativeErrorCode -eq 1223) {
+            throw "A solicitação do UAC foi cancelada. Aprove a elevação para criar a regra de acesso local."
+        }
+        throw "Não foi possível abrir o pedido de elevação do Firewall do Windows: $($_.Exception.Message)"
+    }
     if ($elevatedProcess.ExitCode -ne 0) {
-        throw "Não foi possível criar a regra do Firewall do Windows."
+        $details = if (Test-Path $firewallLogPath) {
+            (Get-Content $firewallLogPath -Raw).Trim()
+        }
+        else {
+            "O processo administrativo terminou sem criar o arquivo de diagnóstico."
+        }
+        throw "A criação da regra do Firewall falhou (código $($elevatedProcess.ExitCode)): $details"
     }
 
     if (-not (Test-LanFirewallAccess $port)) {
@@ -797,6 +848,26 @@ function Invoke-LauncherAction([scriptblock]$Action) {
     }
     catch {
         Write-Host "Erro: $($_.Exception.Message)" -ForegroundColor Red
+    }
+}
+
+if ($ConfigureLanFirewallRule) {
+    try {
+        Set-LanFirewallRule $FirewallPort
+        exit 0
+    }
+    catch {
+        $details = ($_ | Format-List * -Force | Out-String).Trim()
+        if ($FirewallLogPath) {
+            try {
+                Set-Content -Path $FirewallLogPath -Value $details -Encoding UTF8
+            }
+            catch {
+                [Console]::Error.WriteLine("Não foi possível gravar o diagnóstico: $($_.Exception.Message)")
+            }
+        }
+        [Console]::Error.WriteLine($details)
+        exit 1
     }
 }
 
