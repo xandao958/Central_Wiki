@@ -719,6 +719,7 @@ function Start-WikiServer {
             -ArgumentList "`"$mainScript`"" `
             -WorkingDirectory $PSScriptRoot `
             -PassThru `
+            -WindowStyle Hidden `
             -RedirectStandardOutput $stdoutLog `
             -RedirectStandardError $stderrLog
     }
