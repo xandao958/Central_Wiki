@@ -722,6 +722,19 @@ def test_article_editor_offers_safe_content_modules(app_client):
     assert "HTML e JavaScript não são executados." in response.text
 
 
+@pytest.mark.parametrize("block_type", [[], {}])
+def test_article_modules_reject_non_string_block_types(block_type):
+    content = json.dumps(
+        {
+            "format": main.ARTICLE_BLOCK_FORMAT,
+            "blocks": [{"type": block_type, "text": "Conteúdo"}],
+        }
+    )
+
+    with pytest.raises(ValueError, match="Tipo de módulo"):
+        main.normalize_article_content(content)
+
+
 def test_article_modules_render_youtube_and_keep_untrusted_markup_escaped(app_client):
     csrf = sign_in(app_client)
     content = {

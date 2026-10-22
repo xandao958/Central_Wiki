@@ -124,22 +124,135 @@ function Get-ManagedServer {
     }
 
     $serverInfo = Get-Content $serverInfoPath -Raw | ConvertFrom-Json
-    $process = Get-CimInstance Win32_Process -Filter "ProcessId = $($serverInfo.pid)"
+    $serverScript = [System.IO.Path]::GetFullPath($mainScript)
+    $launcherPath = [System.IO.Path]::GetFullPath($venvPython)
+    $basePythonPath = (& $venvPython -c "import sys; print(sys._base_executable)" | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($basePythonPath)) {
+        throw "Não foi possível identificar o interpretador Python do ambiente virtual."
+    }
+    $basePythonPath = [System.IO.Path]::GetFullPath($basePythonPath)
+
+    $process = Get-CimInstance Win32_Process -Filter "ProcessId = $($serverInfo.pid)" -ErrorAction SilentlyContinue
+    $listener = Get-NetTCPConnection -State Listen -LocalPort ([int]$serverInfo.port) -ErrorAction SilentlyContinue |
+        Where-Object { $_.LocalAddress -eq [string]$serverInfo.host } |
+        Select-Object -First 1
+
+    if (-not $process -and $listener) {
+        $process = Get-CimInstance Win32_Process -Filter "ProcessId = $($listener.OwningProcess)" -ErrorAction SilentlyContinue
+    }
     if (-not $process) {
         Remove-Item $serverInfoPath -Force
         return $null
     }
 
     $processPath = [System.IO.Path]::GetFullPath($process.ExecutablePath)
-    $expectedPath = [System.IO.Path]::GetFullPath($venvPython)
     if (
-        $processPath -ine $expectedPath -or
-        $process.CommandLine -notlike "*$mainScript*"
+        $processPath -ine $launcherPath -and $processPath -ine $basePythonPath
     ) {
-        throw "O PID salvo em data\server.json pertence a outro processo. Por segurança, ele não será encerrado; verifique esse arquivo antes de continuar."
+        throw "O PID salvo em data\server.json pertence a outro executável. Por segurança, ele não será encerrado; verifique esse arquivo antes de continuar."
+    }
+    if ($process.CommandLine -notlike "*$serverScript*") {
+        throw "O PID salvo em data\server.json não corresponde ao servidor Central_Wiki. Por segurança, ele não será encerrado."
+    }
+
+    if ($processPath -ieq $launcherPath) {
+        if (-not $listener) {
+            Remove-Item $serverInfoPath -Force
+            return $null
+        }
+        $listenerProcess = Get-CimInstance Win32_Process -Filter "ProcessId = $($listener.OwningProcess)" -ErrorAction SilentlyContinue
+        if (
+            -not $listenerProcess -or
+            [int]$listenerProcess.ParentProcessId -ne [int]$process.ProcessId -or
+            [System.IO.Path]::GetFullPath($listenerProcess.ExecutablePath) -ine $basePythonPath -or
+            $listenerProcess.CommandLine -notlike "*$serverScript*"
+        ) {
+            throw "O processo que escuta a porta não corresponde ao servidor iniciado pelo launcher. Ele não será encerrado."
+        }
+        $serverInfo.launcherPid = [int]$process.ProcessId
+        $serverInfo.pid = [int]$listenerProcess.ProcessId
+        $serverInfo | ConvertTo-Json | Set-Content -Path $serverInfoPath -Encoding UTF8
+    }
+    else {
+        if ($listener -and [int]$listener.OwningProcess -ne [int]$process.ProcessId) {
+            throw "A porta configurada está sendo atendida por outro processo; ele não será encerrado."
+        }
+        $launcherPid = if ($serverInfo.PSObject.Properties.Name -contains "launcherPid") {
+            [int]$serverInfo.launcherPid
+        }
+        else {
+            [int]$process.ParentProcessId
+        }
+        $launcherProcess = if ($launcherPid -gt 0) {
+            Get-CimInstance Win32_Process -Filter "ProcessId = $launcherPid" -ErrorAction SilentlyContinue
+        }
+        else {
+            $null
+        }
+        if (
+            $launcherProcess -and
+            [System.IO.Path]::GetFullPath($launcherProcess.ExecutablePath) -ieq $launcherPath -and
+            $launcherProcess.CommandLine -like "*$serverScript*"
+        ) {
+            $serverInfo.launcherPid = $launcherPid
+        }
+        else {
+            $serverInfo.launcherPid = $null
+        }
+        $serverInfo.pid = [int]$process.ProcessId
+        $serverInfo | ConvertTo-Json | Set-Content -Path $serverInfoPath -Encoding UTF8
+    }
+
+    if ($processPath -ine $launcherPath -and $processPath -ine $basePythonPath) {
+        throw "O processo do servidor não corresponde ao ambiente Python esperado."
     }
 
     return $serverInfo
+}
+
+function Enable-LanFirewallAccess {
+    $port = Get-ConfiguredPort
+    $ruleName = "Central_Wiki LAN access"
+    $elevatedCommand = @"
+`$ErrorActionPreference = 'Stop'
+`$rule = Get-NetFirewallRule -DisplayName '$ruleName' -ErrorAction SilentlyContinue |
+    Where-Object { `$_.Group -eq 'Central_Wiki LAN access' }
+if (`$rule) {
+    Set-NetFirewallRule -InputObject `$rule -Enabled True -Direction Inbound -Action Allow -Profile Any -ErrorAction Stop
+    Set-NetFirewallPortFilter -InputObject `$rule -Protocol TCP -LocalPort '$port' -ErrorAction Stop
+    Set-NetFirewallAddressFilter -InputObject `$rule -RemoteAddress LocalSubnet -ErrorAction Stop
+}
+else {
+    New-NetFirewallRule -DisplayName '$ruleName' -Group 'Central_Wiki LAN access' -Direction Inbound -Action Allow -Protocol TCP -LocalPort '$port' -RemoteAddress LocalSubnet -Profile Any -ErrorAction Stop | Out-Null
+}
+"@
+    $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($elevatedCommand))
+    $powershellPath = Join-Path $PSHOME "powershell.exe"
+    $elevatedProcess = Start-Process `
+        -FilePath $powershellPath `
+        -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", $encodedCommand) `
+        -Verb RunAs `
+        -Wait `
+        -PassThru
+    if ($elevatedProcess.ExitCode -ne 0) {
+        throw "Não foi possível criar a regra do Firewall do Windows."
+    }
+
+    $rule = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue |
+        Where-Object { $_.Group -eq "Central_Wiki LAN access" }
+    if (-not $rule -or $rule.Enabled -ne "True" -or $rule.Action -ne "Allow") {
+        throw "A regra de acesso à rede local não foi confirmada pelo Firewall do Windows."
+    }
+    $portFilter = $rule | Get-NetFirewallPortFilter
+    $addressFilter = $rule | Get-NetFirewallAddressFilter
+    if (
+        $portFilter.Protocol -ne "TCP" -or
+        [string]$portFilter.LocalPort -ne [string]$port -or
+        [string]$addressFilter.RemoteAddress -notmatch "LocalSubnet"
+    ) {
+        throw "A regra do firewall foi criada, mas não corresponde ao escopo seguro da porta $port e da rede local."
+    }
+    Write-Host "Firewall configurado: conexões TCP da rede local podem acessar a porta $port."
 }
 
 function Ensure-Environment {
@@ -541,6 +654,7 @@ function Start-WikiServer {
 
     $serverInfo = [ordered]@{
         pid       = $server.Id
+        launcherPid = $null
         host      = $machineIp
         port      = $port
         url       = "http://${machineIp}:${port}"
@@ -578,8 +692,17 @@ function Start-WikiServer {
         throw "A aplicação não iniciou. Consulte data\app-error.log. $errorDetails"
     }
 
+    $serverInfo = Get-ManagedServer
+    if (-not $serverInfo) {
+        throw "A aplicação respondeu, mas não foi possível identificar o processo que atende a porta $port."
+    }
+
     Start-Process $serverInfo.url
     Write-Host "Servidor ativo: $($serverInfo.url)"
+    Write-Host "Para acessar de outro dispositivo na rede local, use esse mesmo endereço."
+    if (-not (Get-NetFirewallRule -DisplayName "Central_Wiki LAN access" -ErrorAction SilentlyContinue)) {
+        Write-Host "Se outro dispositivo não conectar, escolha a opção 7 para liberar somente a rede local no firewall." -ForegroundColor Yellow
+    }
 }
 
 function Stop-WikiServer {
@@ -589,17 +712,44 @@ function Stop-WikiServer {
         return
     }
 
-    Stop-Process -Id $serverInfo.pid
+    $processIds = @($serverInfo.pid, $serverInfo.launcherPid) |
+        Where-Object { $_ -and [int]$_ -gt 0 } |
+        Select-Object -Unique
+    foreach ($processId in $processIds) {
+        if (Get-Process -Id ([int]$processId) -ErrorAction SilentlyContinue) {
+            Stop-Process -Id ([int]$processId)
+        }
+    }
+
     $deadline = (Get-Date).AddSeconds(20)
     while ((Get-Date) -lt $deadline) {
-        $process = Get-Process -Id $serverInfo.pid -ErrorAction SilentlyContinue
-        if (-not $process) {
+        $remainingProcesses = @(
+            $processIds | Where-Object {
+                Get-Process -Id ([int]$_) -ErrorAction SilentlyContinue
+            }
+        )
+        $remainingListener = Get-NetTCPConnection `
+            -State Listen `
+            -LocalPort ([int]$serverInfo.port) `
+            -ErrorAction SilentlyContinue |
+            Where-Object { $_.LocalAddress -eq [string]$serverInfo.host }
+        if (-not $remainingProcesses -and -not $remainingListener) {
             break
         }
         Start-Sleep -Milliseconds 250
     }
 
-    if (Get-Process -Id $serverInfo.pid -ErrorAction SilentlyContinue) {
+    $remainingProcesses = @(
+        $processIds | Where-Object {
+            Get-Process -Id ([int]$_) -ErrorAction SilentlyContinue
+        }
+    )
+    $remainingListener = Get-NetTCPConnection `
+        -State Listen `
+        -LocalPort ([int]$serverInfo.port) `
+        -ErrorAction SilentlyContinue |
+        Where-Object { $_.LocalAddress -eq [string]$serverInfo.host }
+    if ($remainingProcesses -or $remainingListener) {
         throw "O servidor não encerrou no prazo esperado. O PID continua salvo em data\server.json."
     }
 
@@ -654,7 +804,8 @@ while (-not $exitLauncher) {
     Write-Host "[4] Abrir no navegador"
     Write-Host "[5] Alternar tema claro/escuro"
     Write-Host "[6] Alterar porta do servidor"
-    Write-Host "[7] Sair (encerra o servidor)"
+    Write-Host "[7] Liberar acesso da rede local no Firewall do Windows (solicita UAC)"
+    Write-Host "[8] Sair (encerra o servidor)"
     $choice = Read-Host "Escolha uma opção"
 
     switch ($choice) {
@@ -691,6 +842,9 @@ while (-not $exitLauncher) {
             Invoke-LauncherAction { Set-WikiPort }
         }
         "7" {
+            Invoke-LauncherAction { Enable-LanFirewallAccess }
+        }
+        "8" {
             Invoke-LauncherAction { Stop-WikiServer }
             $exitLauncher = $true
         }

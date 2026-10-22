@@ -14,12 +14,12 @@ import sys
 import time
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Generator, cast
 from urllib.parse import parse_qs, urlsplit
 
 import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -33,7 +33,7 @@ ROLE_LABELS = {
     "editor": "Editor",
     "approver": "Moderador",
 }
-DEFAULT_APP_SETTINGS = {
+DEFAULT_APP_SETTINGS: dict[str, Any] = {
     "app_name": "Central_Wiki",
     "page_home": "Visão geral",
     "page_articles": "Base de conhecimento",
@@ -140,25 +140,31 @@ def normalize_article_content(raw_content: str) -> tuple[str, list[dict[str, str
     if len(raw_content) > MAX_ARTICLE_CONTENT_LENGTH:
         raise ValueError("O conteúdo excede o limite permitido.")
     try:
-        document = json.loads(raw_content)
+        document: Any = json.loads(raw_content)
     except (json.JSONDecodeError, TypeError):
         document = None
 
-    if not isinstance(document, dict) or document.get("format") != ARTICLE_BLOCK_FORMAT:
-        blocks = [{"type": "paragraph", "text": raw_content.strip()}]
+    parsed_document = cast(dict[str, Any], document) if isinstance(document, dict) else None
+    if parsed_document is None or parsed_document.get("format") != ARTICLE_BLOCK_FORMAT:
+        blocks: list[dict[str, str]] = [{"type": "paragraph", "text": raw_content.strip()}]
     else:
-        supplied_blocks = document.get("blocks")
-        if not isinstance(supplied_blocks, list) or len(supplied_blocks) > MAX_ARTICLE_BLOCKS:
+        supplied_blocks = parsed_document.get("blocks")
+        if not isinstance(supplied_blocks, list):
+            raise ValueError(f"Use no máximo {MAX_ARTICLE_BLOCKS} módulos por artigo.")
+        supplied_blocks = cast(list[Any], supplied_blocks)
+        if len(supplied_blocks) > MAX_ARTICLE_BLOCKS:
             raise ValueError(f"Use no máximo {MAX_ARTICLE_BLOCKS} módulos por artigo.")
         blocks = []
         video_count = 0
         for supplied in supplied_blocks:
             if not isinstance(supplied, dict):
                 raise ValueError("Um dos módulos do artigo está inválido.")
+            supplied = cast(dict[str, Any], supplied)
             block_type = supplied.get("type")
+            if not isinstance(block_type, str):
+                raise ValueError("Tipo de módulo não permitido.")
             if block_type in {"paragraph", "heading"}:
-                key = "text" if block_type == "paragraph" else "text"
-                text = supplied.get(key, "")
+                text = supplied.get("text", "")
                 if not isinstance(text, str) or len(text) > MAX_BLOCK_TEXT_LENGTH:
                     raise ValueError("O texto de um módulo excede o limite permitido.")
                 text = text.strip()
@@ -212,17 +218,20 @@ def normalize_article_content(raw_content: str) -> tuple[str, list[dict[str, str
 
 def article_editor_blocks(raw_content: str) -> list[dict[str, str]]:
     try:
-        document = json.loads(raw_content)
+        document: Any = json.loads(raw_content)
     except (json.JSONDecodeError, TypeError):
         document = None
-    if isinstance(document, dict) and document.get("format") == ARTICLE_BLOCK_FORMAT:
-        supplied_blocks = document.get("blocks")
+    parsed_document = cast(dict[str, Any], document) if isinstance(document, dict) else None
+    if parsed_document is not None and parsed_document.get("format") == ARTICLE_BLOCK_FORMAT:
+        supplied_blocks = parsed_document.get("blocks")
         if isinstance(supplied_blocks, list):
-            blocks = []
+            supplied_blocks = cast(list[Any], supplied_blocks)
+            blocks: list[dict[str, str]] = []
             for block in supplied_blocks[:MAX_ARTICLE_BLOCKS]:
                 if not isinstance(block, dict):
                     continue
-                editor_block = {
+                block = cast(dict[str, Any], block)
+                editor_block: dict[str, str] = {
                     key: value[:MAX_BLOCK_TEXT_LENGTH]
                     if key == "text"
                     else value[:MAX_MEDIA_URL_LENGTH]
@@ -242,7 +251,7 @@ def article_editor_blocks(raw_content: str) -> list[dict[str, str]]:
 
 
 def article_fallback_text(raw_content: str) -> str:
-    lines = []
+    lines: list[str] = []
     for block in article_editor_blocks(raw_content):
         if block.get("type") in {"paragraph", "heading"}:
             lines.append(block.get("text", ""))
@@ -302,7 +311,7 @@ def editable_sectors(user: sqlite3.Row) -> list[sqlite3.Row]:
 
 
 @contextmanager
-def connect_db() -> Iterator[sqlite3.Connection]:
+def connect_db() -> Generator[sqlite3.Connection, None, None]:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
@@ -601,7 +610,7 @@ def app_configuration() -> dict[str, Any]:
             FROM app_configuration WHERE id = 1
             """
         ).fetchone()
-    configuration = dict(DEFAULT_APP_SETTINGS)
+    configuration: dict[str, Any] = dict(DEFAULT_APP_SETTINGS)
     if row:
         configuration.update(
             {key: row[key] for key in DEFAULT_APP_SETTINGS if row[key]}
@@ -651,8 +660,8 @@ def can_review_proposals(user: sqlite3.Row, sector_id: int) -> bool:
 def page_context(request: Request, user: sqlite3.Row | None = None, **extra: Any) -> dict[str, Any]:
     payload = decode_session(request.cookies.get(COOKIE_NAME))
     preview_sector_id = preview_sector_for(request, user) if user else None
-    memberships = memberships_for(user["id"]) if user else []
-    display_user = user
+    memberships: list[Any] = memberships_for(user["id"]) if user else []
+    display_user: sqlite3.Row | dict[str, Any] | None = user
     if preview_sector_id is not None and user:
         with connect_db() as db:
             sector = db.execute(
@@ -680,7 +689,7 @@ def page_context(request: Request, user: sqlite3.Row | None = None, **extra: Any
         )
         or "Sem setor vinculado"
     )
-    context = {
+    context: dict[str, Any] = {
         "request": request,
         "user": display_user,
         "csrf_token": payload.get("csrf", "") if payload else "",
@@ -690,8 +699,12 @@ def page_context(request: Request, user: sqlite3.Row | None = None, **extra: Any
         "role_labels": ROLE_LABELS,
         "status_labels": STATUS_LABELS,
         "sidebar_full_name": (
-            (display_user["full_name"] or "").strip()
-            or (display_user["username"] if display_user else "")
+            (
+                (display_user["full_name"] or "").strip()
+                or display_user["username"]
+            )
+            if display_user
+            else ""
         ),
         "sidebar_access_label": sidebar_access_label,
         "app_configuration": app_configuration(),
@@ -712,7 +725,7 @@ templates = Jinja2Templates(directory=ROOT / "templates")
 
 
 @app.exception_handler(401)
-async def unauthorized(request: Request, _: HTTPException) -> RedirectResponse:
+async def unauthorized(_request: Request, _: HTTPException) -> RedirectResponse:
     return RedirectResponse("/login", status_code=303)
 
 
@@ -1188,7 +1201,7 @@ async def article_detail(request: Request, article_id: int):
             """,
             (article_id,),
         ).fetchall()
-        proposal_rows = db.execute(
+        proposal_rows: list[sqlite3.Row] = db.execute(
             """
             SELECT p.*, u.username AS author_name, reviewer.username AS reviewer_name
             FROM article_proposals p
@@ -1198,7 +1211,7 @@ async def article_detail(request: Request, article_id: int):
             """,
             (article_id,),
         ).fetchall()
-    proposals = (
+    proposals: list[dict[str, Any]] = (
         [
             {**dict(proposal), "blocks": article_display_blocks(proposal["content"])}
             for proposal in proposal_rows
@@ -1292,6 +1305,7 @@ async def review_article_proposal(
             if action == "accept":
                 _, article_blocks = normalize_article_content(article["content"])
                 _, proposal_blocks = normalize_article_content(proposal["content"])
+                proposal_blocks: list[dict[str, str]]
                 proposal_blocks = [{"type": "heading", "text": proposal["title"]}, *proposal_blocks]
                 combined = json.dumps(
                     {"format": ARTICLE_BLOCK_FORMAT, "blocks": article_blocks + proposal_blocks},
@@ -1832,9 +1846,10 @@ async def api_articles(
     q: str = "",
     limit: int = Query(default=100, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
-):
+) -> list[dict[str, Any]]:
     user = require_user(request)
     preview_sector_id = preview_sector_for(request, user)
+    rows: list[sqlite3.Row] = []
     with connect_db() as db:
         if preview_sector_id is not None:
             rows = db.execute(
