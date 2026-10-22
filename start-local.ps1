@@ -300,11 +300,13 @@ function Enable-LanFirewallAccess {
     Remove-Item $firewallLogPath -Force -ErrorAction SilentlyContinue
     $powershellPath = Join-Path $PSHOME "powershell.exe"
     $arguments = "-NoLogo -NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -ConfigureLanFirewallRule -FirewallPort $port -FirewallLogPath `"$firewallLogPath`""
+    Write-Host "Solicitando permissão do Windows para liberar TCP/$port apenas na rede local. Confirme a janela do UAC."
     try {
         $elevatedProcess = Start-Process `
             -FilePath $powershellPath `
             -ArgumentList $arguments `
             -Verb RunAs `
+            -WindowStyle Hidden `
             -Wait `
             -PassThru
     }
