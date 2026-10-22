@@ -375,7 +375,7 @@ function Get-ConfiguredPort {
     }
     else {
         $settings = Get-LauncherSettings
-        $portText = if ($settings.ContainsKey("port")) { [string]$settings.port } else { "51600" }
+        $portText = if ($settings.ContainsKey("port")) { [string]$settings.port } else { "5160" }
     }
 
     $port = 0

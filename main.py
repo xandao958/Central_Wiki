@@ -1992,7 +1992,7 @@ def check_database_integrity() -> None:
 
 
 def configured_server_port() -> int:
-    value = os.getenv("WIKI_PORT", "51600")
+    value = os.getenv("WIKI_PORT", "5160")
     try:
         port = int(value)
     except ValueError as exc:
