@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{{ app_configuration.page_admin }}{% endblock %}
+{% block content %}
+<header class="topbar"><div><span class="eyebrow">PLATAFORMA / ADMINISTRAÇÃO</span><h1>{{ app_configuration.page_admin }}</h1><p class="muted">Gerencie contas, áreas de acesso e funções por setor.</p></div><a class="button secondary" href="/admin/audit">Ver auditoria →</a></header>
+{% if request.query_params.get('error') %}<div class="alert" role="alert">
+  {% if request.query_params.get('error') == 'user-validation' %}O usuário precisa ter entre 3 e 80 caracteres e a senha, ao menos 12.{% elif request.query_params.get('error') == 'full-name' %}Informe nome e sobrenome para o novo usuário.{% elif request.query_params.get('error') == 'duplicate-user' %}Este nome de usuário já existe.{% elif request.query_params.get('error') == 'duplicate-sector' %}Este setor já existe.{% elif request.query_params.get('error') == 'sector-validation' %}Informe um nome de setor com até 80 caracteres.{% elif request.query_params.get('error') == 'sector-selection' or request.query_params.get('error') == 'role-selection' %}Selecione um setor e uma função válidos.{% else %}Revise os dados informados e tente novamente.{% endif %}
+</div>{% endif %}
+<section class="panel preview-panel">
+  <div class="panel-heading"><div><h2>Visualizar como usuário comum</h2><p>Veja somente artigos publicados de um setor, como um leitor sem permissões administrativas.</p></div></div>
+  {% if sectors %}
+  <form method="post" action="/admin/preview" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="action" value="start">
+    <select class="form-select" name="sector_id" aria-label="Setor para visualizar" required>
+      {% for sector in sectors %}<option value="{{ sector.id }}">{{ sector.name }}</option>{% endfor %}
+    </select>
+    <button class="button secondary" type="submit">Iniciar visualização</button>
+  </form>
+  {% else %}
+  <p class="muted">Cadastre um setor antes de iniciar a visualização.</p>
+  {% endif %}
+</section>
+<div class="admin-grid">
+  <section class="panel"><div class="panel-heading"><div><h2>Criar usuário</h2><p>As contas são criadas somente pela administração.</p></div></div>
+    <form method="post" action="/admin/users" class="stack-form compact-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>Nome de usuário<input class="form-control" name="username" minlength="3" maxlength="80" autocomplete="username" required></label>
+      <label>Nome e sobrenome<input class="form-control" name="full_name" minlength="5" maxlength="160" autocomplete="name" required></label>
+      <label>Senha inicial<input class="form-control" type="password" name="password" minlength="12" autocomplete="new-password" required><small>Mínimo de 12 caracteres. Oriente o usuário a usar uma senha exclusiva.</small></label>
+      {% if sectors %}
+      <label>Setor inicial<select class="form-select" name="sector_id"><option value="">Sem vínculo inicial</option>{% for sector in sectors %}<option value="{{ sector.id }}">{{ sector.name }}</option>{% endfor %}</select></label>
+      <label>Função no setor<select class="form-select" name="role"><option value="reader">Leitor</option><option value="editor">Editor</option><option value="approver">Moderador</option></select></label>
+      {% endif %}
+      <label class="checkbox-label"><input type="checkbox" name="is_admin" value="yes"> Administrador de TI (acesso global)</label>
+      {% if sectors %}<small>Contas de TI têm acesso global e não precisam de vínculo com setor.</small>{% endif %}
+      <button class="button primary" type="submit">Criar conta</button>
+    </form>
+  </section>
+  <section class="panel"><div class="panel-heading"><div><h2>Criar setor</h2><p>Ex.: Monitoramento, Treinamento ou Suporte.</p></div></div>
+    <form method="post" action="/admin/sectors" class="stack-form compact-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>Nome do setor<input class="form-control" name="name" maxlength="80" required></label>
+      <button class="button secondary" type="submit">Adicionar setor</button>
+    </form>
+    <div class="sector-chips">{% for sector in sectors %}<span>{{ sector.name }}</span>{% else %}<small class="muted">Nenhum setor cadastrado.</small>{% endfor %}</div>
+  </section>
+</div>
+<section class="panel users-panel"><div class="panel-heading"><div><h2>Contas e vínculos</h2><p>Funções são aplicadas individualmente em cada setor.</p></div></div>
+  <div class="table-wrap"><table><thead><tr><th>Usuário</th><th>Setor / cargo</th><th>Setores e funções</th><th>Estado</th><th></th></tr></thead><tbody>
+  {% for account in users %}
+  <tr><td><strong>{{ account.username }}</strong></td><td>{% if account.is_admin %}TI · Administrador{% else %}{% for membership in memberships if membership.user_id == account.id %}{{ membership.sector_name }} — {{ role_labels.get(membership.role, 'Colaborador') }}{% if not loop.last %}<br>{% endif %}{% else %}—{% endfor %}{% endif %}</td>
+    <td><div class="membership-list">{% for membership in memberships if membership.user_id == account.id %}<form method="post" action="/admin/memberships" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="user_id" value="{{ account.id }}"><input type="hidden" name="sector_id" value="{{ membership.sector_id }}">
+      <span>{{ membership.sector_name }}</span><select class="form-select" name="role" aria-label="Função em {{ membership.sector_name }}" onchange="this.form.submit()">{% for key, label in role_labels.items() %}<option value="{{ key }}" {% if membership.role == key %}selected{% endif %}>{{ label }}</option>{% endfor %}<option value="none">Remover</option></select></form>{% endfor %}
+      {% if not account.is_admin and sectors %}<form method="post" action="/admin/memberships" class="inline-form add-membership"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="user_id" value="{{ account.id }}"><select class="form-select" name="sector_id" aria-label="Setor para vincular" required>{% for sector in sectors %}<option value="{{ sector.id }}">{{ sector.name }}</option>{% endfor %}</select><select class="form-select" name="role" aria-label="Função no setor"><option value="reader">Leitor</option><option value="editor">Editor</option><option value="approver">Moderador</option></select><button class="mini-button" type="submit">Vincular</button></form>{% endif %}
+    </div></td><td><span class="status {% if account.active %}status-published{% else %}status-draft{% endif %}">{% if account.active %}Ativo{% else %}Inativo{% endif %}</span></td>
+    <td>{% if account.id != user.id %}<form method="post" action="/admin/users/{{ account.id }}/toggle"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="text-button" type="submit">{% if account.active %}Desativar{% else %}Ativar{% endif %}</button></form>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody></table></div>
+</section>
+{% endblock %}

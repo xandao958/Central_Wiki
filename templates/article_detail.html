@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}{{ article.title }}{% endblock %}
+{% block content %}
+<div class="breadcrumbs"><a href="/articles">Base de conhecimento</a><span>/</span><span>{{ article.sector_name }}</span></div>
+<article class="reading-page">
+  <div class="reading-top"><span class="status status-{{ article.status }}">{{ status_labels[article.status] }}</span><span>Versão {{ article.version }} · Atualizado em {{ article.updated_at[:10] }}</span></div>
+  <h1>{{ article.title }}</h1>
+  <p class="byline">Setor {{ article.sector_name }} <span>·</span> por {{ article.author_name }}</p>
+  <div class="reading-content">
+    {% for block in article_blocks %}
+      {% if block.type == 'paragraph' %}<p class="article-paragraph">{{ block.text }}</p>
+      {% elif block.type == 'heading' %}<h2 class="article-block-heading">{{ block.text }}</h2>
+      {% elif block.type == 'image' %}<figure class="article-image"><img src="{{ block.url }}" alt="{{ block.alt }}" loading="lazy" referrerpolicy="no-referrer"><figcaption>{{ block.alt }}</figcaption></figure>
+      {% elif block.type == 'youtube' %}<div class="video-embed"><iframe src="https://www.youtube-nocookie.com/embed/{{ block.video_id }}" title="Vídeo incorporado do YouTube" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>{% endif %}
+    {% endfor %}
+  </div>
+  <div class="reading-actions">
+    {% if can_edit %}<a class="button secondary" href="/articles/{{ article.id }}/edit">{{ app_configuration.button_edit_article }}</a>{% endif %}
+    {% if article.status == 'review' and (user.is_admin or memberships|selectattr('id', 'equalto', article.sector_id)|selectattr('role', 'equalto', 'approver')|list) %}
+    <form method="post" action="/articles/{{ article.id }}/publish"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button primary" type="submit">{{ app_configuration.button_publish }}</button></form>
+    {% endif %}
+  </div>
+  {% if request.query_params.get('proposal') == 'sent' %}<div class="success-message" role="status">Proposta enviada para a fila de análise.</div>{% elif request.query_params.get('proposal') == 'accept' %}<div class="success-message" role="status">Proposta integrada ao artigo e registrada no histórico.</div>{% elif request.query_params.get('proposal') == 'reject' %}<div class="success-message" role="status">Proposta rejeitada.</div>{% endif %}
+  {% if request.query_params.get('proposal_error') %}<div class="alert" role="alert">Informe um título e conteúdo válidos para a proposta.</div>{% endif %}
+  {% if can_suggest %}
+  <section class="panel proposal-panel">
+    <div class="panel-heading"><div><h2>Enviar uma ideia de edição</h2><p>As propostas ficam separadas do artigo até serem integradas por um Moderador do setor ou pela TI.</p></div></div>
+    <form method="post" action="/articles/{{ article.id }}/proposals" class="stack-form compact-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>Título da proposta<input class="form-control" name="title" maxlength="180" required></label>
+      <label>Conteúdo sugerido<textarea class="form-control" name="content" rows="5" maxlength="200000" required></textarea></label>
+      <button class="button secondary" type="submit">Enviar para análise</button>
+    </form>
+  </section>
+  {% endif %}
+  {% if proposals %}
+  <section class="panel proposal-panel">
+    <div class="panel-heading"><div><h2>Fila de propostas</h2><p>Escolha individualmente quais contribuições serão incorporadas à versão oficial.</p></div></div>
+    {% for proposal in proposals %}
+    <article class="proposal-card">
+      <div class="proposal-heading"><div><h3>{{ proposal.title }}</h3><span>{{ proposal.author_name }} · {{ proposal.created_at[:16] }}</span></div><span class="status status-{{ 'review' if proposal.status == 'pending' else 'published' if proposal.status == 'accepted' else 'draft' }}">{{ {'pending': 'Pendente', 'accepted': 'Integrada', 'rejected': 'Rejeitada'}[proposal.status] }}</span></div>
+      <div class="reading-content proposal-content">{% for block in proposal.blocks %}{% if block.type == 'paragraph' %}<p class="article-paragraph">{{ block.text }}</p>{% elif block.type == 'heading' %}<h3>{{ block.text }}</h3>{% elif block.type == 'image' %}<figure class="article-image"><img src="{{ block.url }}" alt="{{ block.alt }}" loading="lazy" referrerpolicy="no-referrer"><figcaption>{{ block.alt }}</figcaption></figure>{% elif block.type == 'youtube' %}<div class="video-embed"><iframe src="https://www.youtube-nocookie.com/embed/{{ block.video_id }}" title="Vídeo incorporado do YouTube" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>{% endif %}{% endfor %}</div>
+      {% if can_review_proposals and proposal.status == 'pending' %}
+      <div class="form-actions">
+        <form method="post" action="/articles/{{ article.id }}/proposals/{{ proposal.id }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button primary" name="action" value="accept" type="submit">Integrar ao artigo</button></form>
+        <form method="post" action="/articles/{{ article.id }}/proposals/{{ proposal.id }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button secondary" name="action" value="reject" type="submit">Rejeitar</button></form>
+      </div>
+      {% elif proposal.reviewer_name %}<p class="muted">Analisada por {{ proposal.reviewer_name }}{% if proposal.reviewed_at %} · {{ proposal.reviewed_at[:16] }}{% endif %}</p>{% endif %}
+    </article>
+    {% endfor %}
+  </section>
+  {% endif %}
+</article>
+{% endblock %}

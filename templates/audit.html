@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}{{ app_configuration.page_audit }}{% endblock %}
+{% block content %}
+<header class="topbar"><div><span class="eyebrow">PLATAFORMA / ADMINISTRAÇÃO</span><h1>{{ app_configuration.page_audit }}</h1><p class="muted">Ações relevantes recentes na plataforma.</p></div><a class="button secondary" href="/admin">← {{ app_configuration.page_admin }}</a></header>
+<section class="panel"><div class="table-wrap"><table><thead><tr><th>Data e hora</th><th>Usuário</th><th>Ação</th><th>Detalhes</th></tr></thead><tbody>{% for log in logs %}<tr><td>{{ log.created_at[:16] }}</td><td>{{ log.username or 'Conta removida' }}</td><td><code>{{ log.action }}</code></td><td>{{ log.details }}</td></tr>{% else %}<tr><td colspan="4">Nenhum registro disponível.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

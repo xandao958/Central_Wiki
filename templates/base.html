@@ -1,0 +1,119 @@
+{% macro sidebar_controls() %}
+<section class="sidebar-tools" aria-label="Ícones do sistema e configurações">
+  <div class="sidebar-tool-list">
+    <form class="sidebar-tool-form" action="/logout" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="sidebar-tool" type="submit" title="Sair da conta" aria-label="Sair da conta">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M10 17l5-5-5-5M15 12H3m8-7h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-8"/></svg>
+        <span>Sair</span>
+      </button>
+    </form>
+    <button class="sidebar-tool theme-toggle" type="button" data-theme-toggle aria-label="Alternar tema claro ou escuro" title="Alternar tema">
+      <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3.5"/><path d="M12 2.5v2M12 19.5v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2.5 12h2m15 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>
+      <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19.2 15.1A8 8 0 0 1 8.9 4.8 8.2 8.2 0 1 0 19.2 15.1Z"/></svg>
+      <span>Tema</span>
+    </button>
+    <a class="sidebar-tool" href="/account/password" title="Configurações da conta" aria-label="Configurações da conta">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm9 5.2v-2.4l-2.1-.7a7.4 7.4 0 0 0-.7-1.6l1-2-1.7-1.7-2 1a7.4 7.4 0 0 0-1.6-.7L13.2 3h-2.4l-.7 2.1a7.4 7.4 0 0 0-1.6.7l-2-1-1.7 1.7 1 2a7.4 7.4 0 0 0-.7 1.6l-2.1.7v2.4l2.1.7c.1.6.4 1.1.7 1.6l-1 2 1.7 1.7 2-1c.5.3 1 .6 1.6.7l.7 2.1h2.4l.7-2.1c.6-.1 1.1-.4 1.6-.7l2 1 1.7-1.7-1-2c.3-.5.4-1 .7-1.6l2.1-.7Z"/></svg>
+      <span>{{ app_configuration.page_account }}</span>
+    </a>
+  </div>
+</section>
+{% endmacro %}
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ app_configuration.app_name }}</title>
+  {% if app_configuration.has_logo %}<link rel="icon" href="/favicon.ico?v={{ app_configuration.brand_version }}" type="{{ app_configuration.logo_type }}">{% else %}<link rel="icon" href="data:,">{% endif %}
+  <script>
+    (() => {
+      let theme;
+      try {
+        theme = localStorage.getItem("wiki-theme");
+      } catch {
+        theme = null;
+      }
+      if (theme !== "light" && theme !== "dark") {
+        theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+      document.documentElement.dataset.theme = theme;
+    })();
+  </script>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  <link rel="stylesheet" href="/static/style.css?v=article-layout-1">
+</head>
+<body>
+  {% if user %}
+  <aside class="sidebar">
+    <a class="brand" href="/" aria-label="{{ app_configuration.app_name }} - início">
+      {% if app_configuration.has_logo %}<img src="/branding/logo?v={{ app_configuration.brand_version }}" alt="" class="brand-logo">{% else %}<span class="brand-logo-placeholder" aria-hidden="true">W</span>{% endif %}
+      <span>{{ app_configuration.app_name }}</span>
+    </a>
+    <div class="workspace-label">PLATAFORMA INTERNA</div>
+    <nav>
+      <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">{{ app_configuration.page_home }}</a>
+      <a href="/articles" class="{% if request.url.path.startswith('/articles') %}active{% endif %}">{{ app_configuration.page_articles }}</a>
+      {% if user.is_admin %}
+      <div class="nav-caption">ADMINISTRAÇÃO</div>
+      <a href="/admin" class="{% if request.url.path == '/admin' %}active{% endif %}">{{ app_configuration.page_admin }}</a>
+      <a href="/admin/audit" class="{% if request.url.path == '/admin/audit' %}active{% endif %}">{{ app_configuration.page_audit }}</a>
+      <a href="/admin/settings" class="{% if request.url.path == '/admin/settings' %}active{% endif %}">{{ app_configuration.page_settings }}</a>
+      {% endif %}
+    </nav>
+    <div class="sidebar-footer">
+      {% if not preview_active %}<a class="sidebar-security" href="/account/password#profile" aria-label="Editar perfil, foto e senha" title="Editar perfil e foto">{% else %}<div class="sidebar-security">{% endif %}
+        <div class="sidebar-profile-avatar">
+          {% if user.has_profile_photo %}<img src="/account/profile/photo" alt="Foto de {{ sidebar_full_name }}">{% else %}<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>{% endif %}
+          {% if not preview_active %}<span class="profile-edit" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m14 5 5 5M4 20l4.3-.9L20 7.4 16.6 4 4.9 15.7 4 20Z"/></svg></span>{% endif %}
+        </div>
+        <div class="sidebar-security-meta"><strong title="{{ sidebar_full_name }}">{{ sidebar_full_name }}</strong><span title="{{ sidebar_access_label }}">{{ sidebar_access_label }}</span></div>
+      {% if not preview_active %}</a>{% else %}</div>{% endif %}
+      <div class="sidebar-bottom">
+        <section class="sidebar-tools" aria-label="Ícones do sistema e configurações">
+          <div class="sidebar-tool-list">
+            <form class="sidebar-tool-form" action="/logout" method="post">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button class="sidebar-tool" type="submit" title="Sair da conta" aria-label="Sair da conta">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M10 17l5-5-5-5M15 12H3m8-7h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-8"/></svg>
+                <span>Sair</span>
+              </button>
+            </form>
+            <button class="sidebar-tool theme-toggle" type="button" data-theme-toggle aria-label="Alternar tema claro ou escuro" title="Alternar tema">
+              <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3.5"/><path d="M12 2.5v2M12 19.5v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2.5 12h2m15 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>
+              <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19.2 15.1A8 8 0 0 1 8.9 4.8 8.2 8.2 0 1 0 19.2 15.1Z"/></svg>
+              <span>Tema</span>
+            </button>
+            <a class="sidebar-tool" href="/account/password" title="Configurações da conta" aria-label="Configurações da conta">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm9 5.2v-2.4l-2.1-.7a7.4 7.4 0 0 0-.7-1.6l1-2-1.7-1.7-2 1a7.4 7.4 0 0 0-1.6-.7L13.2 3h-2.4l-.7 2.1a7.4 7.4 0 0 0-1.6.7l-2-1-1.7 1.7 1 2a7.4 7.4 0 0 0-.7 1.6l-2.1.7v2.4l2.1.7c.1.6.4 1.1.7 1.6l-1 2 1.7 1.7 2-1c.5.3 1 .6 1.6.7l.7 2.1h2.4l.7-2.1c.6-.1 1.1-.4 1.6-.7l2 1 1.7-1.7-1-2c.3-.5.6-1 .7-1.6l2.1-.7Z"/></svg>
+              <span>{{ app_configuration.page_account }}</span>
+            </a>
+          </div>
+        </section>
+      </div>
+      <details class="mobile-actions">
+        <summary class="mobile-actions-toggle" aria-label="Abrir ações rápidas" title="Ações rápidas">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="8" cy="7" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="10" cy="17" r="1.5"/></svg>
+        </summary>
+        <div class="mobile-actions-menu">{{ sidebar_controls() }}</div>
+      </details>
+    </div>
+  </aside>
+  {% endif %}
+  <main class="{% if user %}main-content{% else %}login-shell{% endif %}">
+    {% if preview_active %}
+    <div class="preview-banner">
+      <div><strong>Modo de visualização</strong><span>Leitor · {{ memberships[0].name if memberships else 'setor indisponível' }} · alterações bloqueadas</span></div>
+      <form method="post" action="/admin/preview">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="action" value="stop">
+        <button class="button secondary">Encerrar visualização</button>
+      </form>
+    </div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  <script src="/static/app.js?v=scroll-cues-4" defer></script>
+</body>
+</html>

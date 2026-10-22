@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{{ app_configuration.page_settings }}{% endblock %}
+{% block content %}
+<header class="topbar"><div><span class="eyebrow">PLATAFORMA / PERSONALIZAÇÃO</span><h1>{{ app_configuration.page_settings }}</h1><p class="muted">Defina a marca, os nomes das páginas e os rótulos principais. Somente texto simples é aceito.</p></div><a class="button secondary" href="/admin">Voltar à administração</a></header>
+{% if request.query_params.get('updated') == 'yes' %}<div class="success-message" role="status">Configurações atualizadas.</div>{% endif %}
+{% if error %}<div class="alert" role="alert">{% if error == 'labels' %}Todos os rótulos são obrigatórios e devem ter até 80 caracteres.{% elif error == 'logo-size' %}O logo deve ter no máximo 2 MB.{% else %}Use um logo PNG, JPEG ou WebP válido. SVG não é aceito.{% endif %}</div>{% endif %}
+<section class="panel">
+  <form method="post" action="/admin/settings" class="stack-form compact-form settings-form" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <h2>Identidade</h2>
+    <label>Nome do aplicativo<input class="form-control" name="app_name" maxlength="80" value="{{ settings.app_name }}" required></label>
+    <label>Logo<input class="form-control" type="file" name="logo" accept="image/png,image/jpeg,image/webp"><small>PNG, JPEG ou WebP; limite de 2 MB.</small></label>
+    {% if settings.has_logo %}<div class="form-actions"><img src="/branding/logo" alt="Logo atual" class="settings-logo-preview"><button class="button secondary" type="submit" name="remove_logo" value="yes">Remover logo</button></div>{% endif %}
+    <h2>Nomes das páginas</h2>
+    <label>Visão geral<input class="form-control" name="page_home" maxlength="80" value="{{ settings.page_home }}" required></label>
+    <label>Base de conhecimento<input class="form-control" name="page_articles" maxlength="80" value="{{ settings.page_articles }}" required></label>
+    <label>Usuários e setores<input class="form-control" name="page_admin" maxlength="80" value="{{ settings.page_admin }}" required></label>
+    <label>Auditoria<input class="form-control" name="page_audit" maxlength="80" value="{{ settings.page_audit }}" required></label>
+    <label>Personalização<input class="form-control" name="page_settings" maxlength="80" value="{{ settings.page_settings }}" required></label>
+    <label>Minha conta<input class="form-control" name="page_account" maxlength="80" value="{{ settings.page_account }}" required></label>
+    <h2>Rótulos principais</h2>
+    <label>Novo artigo<input class="form-control" name="button_new_article" maxlength="80" value="{{ settings.button_new_article }}" required></label>
+    <label>Salvar rascunho<input class="form-control" name="button_save_draft" maxlength="80" value="{{ settings.button_save_draft }}" required></label>
+    <label>Enviar para revisão<input class="form-control" name="button_submit_review" maxlength="80" value="{{ settings.button_submit_review }}" required></label>
+    <label>Editar artigo<input class="form-control" name="button_edit_article" maxlength="80" value="{{ settings.button_edit_article }}" required></label>
+    <label>Aprovar e publicar<input class="form-control" name="button_publish" maxlength="80" value="{{ settings.button_publish }}" required></label>
+    <div class="form-actions"><a class="button secondary" href="/admin">Cancelar</a><button class="button primary" type="submit">Salvar configurações</button></div>
+  </form>
+</section>
+{% endblock %}

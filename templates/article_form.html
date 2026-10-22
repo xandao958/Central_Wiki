@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}{% if article %}Editar artigo{% else %}Novo artigo{% endif %}{% endblock %}
+{% block content %}
+<div class="breadcrumbs"><a href="/articles">Base de conhecimento</a><span>/</span><strong>{% if article %}Editar artigo{% else %}Novo artigo{% endif %}</strong></div>
+<div class="form-page article-editor-page">
+  <header class="form-heading"><span class="eyebrow">CONTEÚDO / DOCUMENTAÇÃO</span><h1>{% if article %}Editar artigo{% else %}Criar artigo{% endif %}</h1><p class="muted">Monte seu artigo com texto, imagens e vídeos em módulos organizados.</p></header>
+  {% if error %}<div class="alert" role="alert">{{ error }}</div>{% endif %}
+  {% if request.query_params.get('error') %}<div class="alert" role="alert">Preencha o título e adicione ao menos um módulo de conteúdo.</div>{% endif %}
+  {% if sectors %}
+  <noscript><div class="alert" role="alert">Sem JavaScript, artigos podem ser editados como texto simples. Para preservar e organizar módulos de mídia existentes, habilite JavaScript.</div></noscript>
+  <form method="post" action="{% if article %}/articles/{{ article.id }}/edit{% else %}/articles/new{% endif %}" class="stack-form article-form" data-article-form>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% if article %}<input type="hidden" name="version" value="{{ article.version }}">{% endif %}
+    <label for="article-title">Título do artigo<input id="article-title" class="form-control" name="title" maxlength="180" value="{{ editor_title }}" placeholder="Ex.: Procedimento de passagem de turno" required></label>
+    <label for="article-sector">Setor responsável<select id="article-sector" class="form-select" name="sector_id" required>{% for sector in sectors %}<option value="{{ sector.id }}" {% if editor_sector_id == sector.id %}selected{% endif %}>{{ sector.name }}</option>{% endfor %}</select></label>
+    <section class="content-builder" aria-labelledby="content-builder-title">
+      <div class="builder-heading"><div><h2 id="content-builder-title">Conteúdo</h2><p>Adicione e organize módulos. HTML e JavaScript não são executados.</p></div><span class="builder-count" data-block-count aria-live="polite"></span></div>
+      <textarea class="form-control article-content-fallback" name="content" rows="10" placeholder="Escreva o conteúdo do artigo..." required>{{ editor_fallback_content }}</textarea>
+      <div class="module-toolbar" data-module-toolbar hidden>
+        <button class="button secondary" type="button" data-add-module="paragraph">＋ Texto</button>
+        <button class="button secondary" type="button" data-add-module="heading">＋ Título</button>
+        <button class="button secondary" type="button" data-add-module="image">＋ Imagem</button>
+        <button class="button secondary" type="button" data-add-module="youtube">＋ YouTube</button>
+      </div>
+      <div class="module-list" data-module-list hidden></div>
+      <p class="builder-help">Imagens usam endereços HTTPS. Vídeos são incorporados pelo YouTube; até 10 por artigo. Os provedores externos podem receber dados de conexão do navegador quando o conteúdo é carregado.</p>
+    </section>
+    <div class="form-actions"><a class="button secondary" href="/articles{% if article %}/{{ article.id }}{% endif %}">Cancelar</a><button class="button secondary" type="submit" name="action" value="draft">{{ app_configuration.button_save_draft }}</button><button class="button primary" type="submit" name="action" value="review">{{ app_configuration.button_submit_review }}</button></div>
+  </form>
+  <div class="editor-initial-data" data-article-blocks='{{ editor_blocks|tojson }}' data-max-videos="{{ max_article_videos }}" data-max-blocks="{{ max_article_blocks }}" hidden></div>
+  {% else %}
+  <div class="empty-state"><h3>Nenhum setor disponível para edição</h3><p>Peça ao administrador para criar um setor e atribuir a função de Editor ou Moderador à sua conta.</p></div>
+  {% endif %}
+</div>
+{% endblock %}

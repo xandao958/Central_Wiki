@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{{ app_configuration.page_home }}{% endblock %}
+{% block content %}
+<header class="topbar dashboard-hero"><div><span class="eyebrow">PLATAFORMA / {{ app_configuration.page_home|upper }}</span><h1>Seu espaço de conhecimento</h1><p class="muted">Documentação, procedimentos e conteúdos da operação em um só lugar.</p></div><div class="hero-actions"><div class="hero-security"><span class="security-mark" aria-hidden="true">◇</span><div><strong>Ambiente protegido</strong><span>Acesso por setor</span></div></div>{% if not preview_active %}<a class="button primary" href="/articles/new">＋ {{ app_configuration.button_new_article }}</a>{% endif %}</div></header>
+<section class="stats-grid">
+  <article class="stat-card"><span>SEUS SETORES</span><strong>{{ memberships|length }}</strong><small>Com acesso autorizado</small></article>
+  <article class="stat-card"><span>CONTEÚDOS RECENTES</span><strong>{{ articles|length }}</strong><small>Atualizados recentemente</small></article>
+  <article class="stat-card"><span>EM REVISÃO</span><strong>{{ pending_count }}</strong><small>Aguardando acompanhamento</small></article>
+</section>
+<section class="section-heading"><div><h2>Atualizados recentemente</h2><p class="muted">Artigos publicados e conteúdos da sua área.</p></div><a class="text-link" href="/articles">Ver base completa →</a></section>
+{% if articles %}
+<div class="article-list">
+{% for article in articles %}
+  <a class="article-row" href="/articles/{{ article.id }}">
+    <div class="doc-icon">↗</div><div class="article-row-main"><strong>{{ article.title }}</strong><span>{{ article.sector_name }} · por {{ article.author_name }}</span></div>
+    <span class="status status-{{ article.status }}">{{ status_labels[article.status] }}</span><span class="row-date">{{ article.updated_at[:10] }}</span><span class="row-arrow">→</span>
+  </a>
+{% endfor %}
+</div>
+{% else %}
+<div class="empty-state"><div class="empty-icon">▤</div><h3>A base começa aqui</h3><p>Crie seu primeiro artigo ou peça ao administrador para vincular você a um setor.</p>{% if not preview_active %}<a class="button secondary" href="/articles/new">Criar artigo</a>{% endif %}</div>
+{% endif %}
+{% endblock %}

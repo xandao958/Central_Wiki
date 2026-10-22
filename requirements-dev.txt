@@ -1,0 +1,4 @@
+-r requirements.txt
+pytest>=8,<10
+httpx>=0.27,<1; python_version < "3.11"
+httpx2>=2,<3; python_version >= "3.11"

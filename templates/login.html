@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Entrar{% endblock %}
+{% block content %}
+<section class="login-card">
+  <button class="icon-button theme-toggle login-theme-toggle" type="button" data-theme-toggle aria-label="Alternar tema" title="Alternar tema">
+    <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3.5"/><path d="M12 2.5v2M12 19.5v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2.5 12h2m15 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>
+    <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19.2 15.1A8 8 0 0 1 8.9 4.8 8.2 8.2 0 1 0 19.2 15.1Z"/></svg>
+  </button>
+  <div class="brand login-brand">{% if app_configuration.has_logo %}<img src="/branding/logo?v={{ app_configuration.brand_version }}" alt="" class="brand-logo">{% else %}<span class="brand-logo-placeholder" aria-hidden="true">W</span>{% endif %}<span>{{ app_configuration.app_name }}</span></div>
+  <p class="eyebrow">PLATAFORMA INTERNA</p>
+  {% if has_users %}
+  <h1>Bem-vindo de volta</h1>
+  <p class="muted">Entre com suas credenciais para acessar a base de conhecimento.</p>
+  {% if error %}<div class="alert">{{ error }}</div>{% endif %}
+  <form method="post" action="/login" class="stack-form">
+    <label>Nome de usuário<input class="form-control" name="username" autocomplete="username" required autofocus></label>
+    <label>Senha<input class="form-control" type="password" name="password" autocomplete="current-password" required></label>
+    <button class="button primary full">Entrar na plataforma <span>→</span></button>
+  </form>
+  {% else %}
+  <h1>Configure o primeiro acesso</h1>
+  <p class="muted">Crie a conta administradora pelo terminal para iniciar a plataforma com segurança.</p>
+  <div class="command-box">python main.py create-admin</div>
+  <p class="small muted">Depois de criar a conta, inicie o servidor e volte a esta página.</p>
+  {% endif %}
+  <p class="login-foot">Acesso protegido · Ambiente interno</p>
+</section>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}{{ app_configuration.page_articles }}{% endblock %}
+{% block content %}
+<header class="topbar"><div><span class="eyebrow">CONHECIMENTO / BIBLIOTECA</span><h1>{{ app_configuration.page_articles }}</h1><p class="muted">Manuais, procedimentos e referências para o trabalho diário.</p></div>{% if not preview_active %}<a class="button primary" href="/articles/new">＋ {{ app_configuration.button_new_article }}</a>{% endif %}</header>
+<form class="filter-bar" method="get" action="/articles">
+  <label class="search-field"><span>⌕</span><input class="form-control" name="q" value="{{ q }}" placeholder="Buscar por título ou conteúdo"></label>
+  <select class="form-select" name="sector_id"><option value="">Todos os setores</option>{% for sector in sectors %}<option value="{{ sector.id }}" {% if sector_id == sector.id %}selected{% endif %}>{{ sector.name }}</option>{% endfor %}</select>
+  <button class="button secondary">Buscar</button>
+</form>
+{% if articles %}
+<div class="article-list">
+{% for article in articles %}
+  <a class="article-row" href="/articles/{{ article.id }}">
+    <div class="doc-icon">↗</div><div class="article-row-main"><strong>{{ article.title }}</strong><span>{{ article.sector_name }} · por {{ article.author_name }}</span></div>
+    <span class="status status-{{ article.status }}">{{ status_labels[article.status] }}</span><span class="row-date">{{ article.updated_at[:10] }}</span><span class="row-arrow">→</span>
+  </a>
+{% endfor %}
+</div>
+{% if total_pages > 1 %}
+<nav class="pagination-bar" aria-label="Paginação dos artigos">
+  <span class="muted">{{ total_count }} artigos · página {{ page }} de {{ total_pages }}</span>
+  <div>
+    {% if page > 1 %}<a class="button secondary" href="{{ request.url.include_query_params(page=page - 1) }}">Anterior</a>{% endif %}
+    {% if page < total_pages %}<a class="button secondary" href="{{ request.url.include_query_params(page=page + 1) }}">Próxima</a>{% endif %}
+  </div>
+</nav>
+{% endif %}
+{% else %}<div class="empty-state"><div class="empty-icon">⌕</div><h3>Nenhum conteúdo encontrado</h3><p>Tente ajustar os termos da busca ou crie o primeiro artigo.</p>{% if not preview_active %}<a class="button secondary" href="/articles/new">{{ app_configuration.button_new_article }}</a>{% endif %}</div>{% endif %}
+{% endblock %}
