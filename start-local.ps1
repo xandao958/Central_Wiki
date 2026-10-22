@@ -629,14 +629,6 @@ function Start-WikiServer {
         Write-Host "Aviso: não foi possível atualizar o atalho na Área de Trabalho: $($_.Exception.Message)" -ForegroundColor Yellow
     }
 
-    try {
-        Enable-LanFirewallAccess
-    }
-    catch {
-        Write-Host "Aviso: não foi possível liberar o acesso de outros dispositivos: $($_.Exception.Message)" -ForegroundColor Yellow
-        Write-Host "O servidor continuará acessível neste PC. Para tentar liberar a rede local novamente, use a opção 7 e aprove a solicitação do Windows."
-    }
-
     $existingServer = Get-ManagedServer
     if ($existingServer) {
         Write-Host "O servidor já está ativo: $($existingServer.url)"
@@ -833,7 +825,7 @@ while (-not $exitLauncher) {
     Write-Host "[4] Abrir no navegador"
     Write-Host "[5] Alternar tema claro/escuro"
     Write-Host "[6] Alterar porta do servidor"
-    Write-Host "[7] Tentar liberar acesso da rede local novamente (solicita UAC)"
+    Write-Host "[7] Verificar e ativar acesso remoto na rede local (solicita UAC se necessário)"
     Write-Host "[8] Sair (encerra o servidor)"
     $choice = Read-Host "Escolha uma opção"
 
